@@ -32,7 +32,8 @@ mega-WAD — so everything runs nicely in both Desktop and Gaming mode.
 10. **DoomRunner config** — seeds `options.json` with the UZDoom engine,
     the `iwads`/`mods` directories, the "DOOM Fusion" preset, and one preset
     per other game whose IWAD is present (Heretic, Hexen, Strife, Chex Quest,
-    Freedoom 1/2, Blasphemer).
+    Freedoom 1/2, Blasphemer), with per-preset config/save-dir isolation
+    enabled so each game keeps its own settings and saves.
 
 The script is **idempotent**: re-run it any time to update or repair.
 

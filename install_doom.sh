@@ -41,7 +41,7 @@
  #                   auto_update, maps dir + mods last-used dir, a "DOOM Fusion"
  #                   preset using UZDoom + doom_fusion.ipk3, plus one preset per
  #                   other game IWAD present (Heretic, Hexen, Strife, Chex,
- #                   Freedoom, Blasphemer)
+ #                   Freedoom, Blasphemer) + per-preset config/save isolation
  #  11. Verify     - `uzdoom -version`, sandbox visibility of the mod tree,
  #                   ipk3 integrity, then a summary with manual next steps
  #
@@ -588,6 +588,11 @@ iwads["search_subdirs"]  = True
 
 data.setdefault("maps", {})["directory"] = str(root / "mods" / "Maps")
 data.setdefault("mods", {})["last_used_dir"] = str(root / "mods" / "Mods")
+
+# per-preset isolation: each preset gets its own config and save dirs
+gopts = data.setdefault("global_options", {})
+gopts["use_preset_name_as_config_dir"] = True
+gopts["use_preset_name_as_save_dir"]   = True
 
 presets = data.setdefault("presets", [])
 if not any(p.get("name") == "DOOM Fusion" for p in presets if isinstance(p, dict)):
