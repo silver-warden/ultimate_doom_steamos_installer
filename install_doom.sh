@@ -594,23 +594,58 @@ gopts = data.setdefault("global_options", {})
 gopts["use_preset_name_as_config_dir"] = True
 gopts["use_preset_name_as_save_dir"]   = True
 
-presets = data.setdefault("presets", [])
-if not any(p.get("name") == "DOOM Fusion" for p in presets if isinstance(p, dict)):
-    presets.append({
-        "name":              "DOOM Fusion",
+# DoomRunner resolves relative paths against its CWD - for the AppImage that
+# is the ephemeral /tmp/.mount_* dir - so preset IWADs must be absolute
+data["use_absolute_paths"] = True
+
+iwads_dir = root / "iwads"
+by_lower = {}
+if iwads_dir.is_dir():
+    for f in iwads_dir.iterdir():
+        if f.is_file():
+            by_lower.setdefault(f.name.lower(), str(f))
+
+# full preset schema as the GUI writes it - partial presets make DoomRunner
+# log "Element ... is missing in options.json" warnings on the next startup
+def full_preset(name, iwad):
+    return {
+        "name":              name,
         "selected_engine":   engine_id,
         "selected_config":   "",
-        "selected_IWAD":     "doom_fusion.ipk3",
+        "selected_IWAD":     iwad,
         "selected_mappacks": [],
         "mods":              [],
         "load_maps_after_mods": False,
-        "alternative_paths": {},
+        "compatibility_options": {"compat_mode": -1, "compatflags1": 0, "compatflags2": 0},
+        "alternative_paths": {"config_dir": "", "save_dir": "", "demo_dir": "", "screenshot_dir": ""},
         "additional_args":   "",
         "env_vars":          {},
-    })
+    }
+
+presets = data.setdefault("presets", [])
+
+# repair presets seeded by older script versions: complete missing fields and
+# rebind IWADs that got absolutized into a dead /tmp/.mount_* AppImage dir
+for p in presets:
+    if not isinstance(p, dict):
+        continue
+    compat = p.setdefault("compatibility_options", {})
+    for k, v in (("compat_mode", -1), ("compatflags1", 0), ("compatflags2", 0)):
+        compat.setdefault(k, v)
+    alt = p.setdefault("alternative_paths", {})
+    for k in ("config_dir", "save_dir", "demo_dir", "screenshot_dir"):
+        alt.setdefault(k, "")
+    sel = p.get("selected_IWAD") or ""
+    if sel and not Path(sel).is_file():
+        reborn = by_lower.get(Path(sel).name.lower())
+        if reborn:
+            p["selected_IWAD"] = reborn
+            print("rebound", p.get("name"), "->", reborn)
+
+if not any(p.get("name") == "DOOM Fusion" for p in presets if isinstance(p, dict)):
+    presets.append(full_preset("DOOM Fusion", str(iwads_dir / "doom_fusion.ipk3")))
 
 # one preset per other game whose IWAD is present in the iwads dir
-iwad_listing = {p.name.lower(): p.name for p in (root / "iwads").glob("*") if p.is_file()}
 for game, candidates in [
     ("Heretic",            ["heretic.wad"]),
     ("Hexen",              ["hexen.wad"]),
@@ -622,20 +657,9 @@ for game, candidates in [
     ("Blasphemer",         ["blasphemer.wad"]),
 ]:
     for cand in candidates:
-        if cand in iwad_listing:
+        if cand in by_lower:
             if not any(p.get("name") == game for p in presets if isinstance(p, dict)):
-                presets.append({
-                    "name":              game,
-                    "selected_engine":   engine_id,
-                    "selected_config":   "",
-                    "selected_IWAD":     iwad_listing[cand],
-                    "selected_mappacks": [],
-                    "mods":              [],
-                    "load_maps_after_mods": False,
-                    "alternative_paths": {},
-                    "additional_args":   "",
-                    "env_vars":          {},
-                })
+                presets.append(full_preset(game, by_lower[cand]))
             break
 data["selected_preset"] = "DOOM Fusion"
 
