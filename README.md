@@ -33,7 +33,13 @@ mega-WAD — so everything runs nicely in both Desktop and Gaming mode.
      the `iwads`/`mods` directories, the "DOOM Fusion" preset, and one preset
      per other game whose IWAD is present (Heretic, Hexen, Strife, Chex Quest,
      Freedoom 1/2, Blasphemer), with per-preset config/save-dir isolation
-     enabled so each game keeps its own settings and saves.
+     enabled so each game keeps its own settings and saves. Plus **one preset
+     per subfolder of `mods/Mods`**, bundling that folder's top-level
+     pk3/wad/deh files (loads in alphabetical order; pick the IWAD once in
+     the GUI) — ready-made presets so handheld users never have to assemble
+     a mod stack by hand. Existing presets are kept as-is, so curated
+     presets survive re-runs; delete one you do not want and it only comes
+     back if you re-run the script.
  11. **Steam shortcut** — adds DoomRunner to the Steam library as a
      non-Steam game (binary `shortcuts.vdf`, every user profile) and installs
      the bundled `steam_art/` grid art (hero, logo, capsules, icon). If Steam

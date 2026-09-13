@@ -41,7 +41,9 @@
  #                   auto_update, maps dir + mods last-used dir, a "DOOM Fusion"
  #                   preset using UZDoom + doom_fusion.ipk3, plus one preset per
  #                   other game IWAD present (Heretic, Hexen, Strife, Chex,
- #                   Freedoom, Blasphemer) + per-preset config/save isolation
+ #                   Freedoom, Blasphemer) + per-preset config/save isolation,
+ #                   and one preset per mods/Mods subfolder bundling its
+ #                   pk3/wad/deh files (IWAD left to pick in the GUI)
  #  11. Shortcut   - add DoomRunner to Steam's library as a non-Steam game
  #                   (binary shortcuts.vdf in every user profile) and install
  #                   the grid art from steam_art/ next to this script; skipped
@@ -613,14 +615,14 @@ if iwads_dir.is_dir():
 
 # full preset schema as the GUI writes it - partial presets make DoomRunner
 # log "Element ... is missing in options.json" warnings on the next startup
-def full_preset(name, iwad):
+def full_preset(name, iwad, mods=None):
     return {
         "name":              name,
         "selected_engine":   engine_id,
         "selected_config":   "",
         "selected_IWAD":     iwad,
         "selected_mappacks": [],
-        "mods":              [],
+        "mods":              [{"checked": True, "path": m} for m in (mods or [])],
         "load_maps_after_mods": False,
         "compatibility_options": {"compat_mode": -1, "compatflags1": 0, "compatflags2": 0},
         "alternative_paths": {"config_dir": "", "save_dir": "", "demo_dir": "", "screenshot_dir": ""},
@@ -667,6 +669,28 @@ for game, candidates in [
             if not any(p.get("name") == game for p in presets if isinstance(p, dict)):
                 presets.append(full_preset(game, by_lower[cand]))
             break
+
+# one preset per mod folder (mods/Mods/<name>), bundling that folder's
+# top-level pk3/wad/deh files - ready-made presets for touch-friendly use.
+# selected_IWAD stays empty (pick the game once in the GUI); existing
+# presets are never touched and folders without loadable files are skipped
+mods_lib = root / "mods" / "Mods"
+if mods_lib.is_dir():
+    mod_ext = {".pk3", ".wad", ".deh"}
+    made = 0
+    for sub in sorted((d for d in mods_lib.iterdir()
+                       if d.is_dir() and not d.name.startswith(".")),
+                      key=lambda d: d.name.lower()):
+        files = sorted((f for f in sub.iterdir()
+                        if f.is_file() and f.suffix.lower() in mod_ext),
+                       key=lambda f: f.name.lower())
+        if not files or any(p.get("name") == sub.name for p in presets if isinstance(p, dict)):
+            continue
+        presets.append(full_preset(sub.name, "", [str(f) for f in files]))
+        made += 1
+    if made:
+        print(f"added {made} mod-folder preset(s)")
+
 data["selected_preset"] = "DOOM Fusion"
 
 cfg.write_text(json.dumps(data, indent="\t") + "\n")
