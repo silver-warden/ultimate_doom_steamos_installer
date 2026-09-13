@@ -42,7 +42,11 @@
  #                   preset using UZDoom + doom_fusion.ipk3, plus one preset per
  #                   other game IWAD present (Heretic, Hexen, Strife, Chex,
  #                   Freedoom, Blasphemer) + per-preset config/save isolation
- #  11. Verify     - `uzdoom -version`, sandbox visibility of the mod tree,
+ #  11. Shortcut   - add DoomRunner to Steam's library as a non-Steam game
+ #                   (binary shortcuts.vdf in every user profile) and install
+ #                   the grid art from steam_art/ next to this script; skipped
+ #                   with a hint while Steam runs, which would rewrite the vdf
+ #  12. Verify     - `uzdoom -version`, sandbox visibility of the mod tree,
  #                   ipk3 integrity, then a summary with manual next steps
  #
  # Usage:
@@ -72,6 +76,8 @@ FREEDOOM_FALLBACK_URL="https://github.com/freedoom/freedoom/releases/download/v0
 BLASPHEMER_REPO="Blasphemer/blasphemer"
 BLASPHEMER_FALLBACK_URL="https://github.com/Blasphemer/blasphemer/releases/download/v0.1.8/blasphem-0.1.8.zip"
 DEFAULT_ROOT="$HOME/juegos/Doom"   # /home/deck/juegos/Doom on the Deck
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+STEAM_ART_DIR="$SCRIPT_DIR/steam_art"   # optional non-Steam-game grid art
 STEAM_DIRS=(
 	"$HOME/.local/share/Steam/steamapps/common"
 	"$HOME/.steam/steam/steamapps/common"
@@ -670,7 +676,190 @@ PYEOF
 }
 
 #------------------------------------------------------------------------------
-# 11. Verification + summary
+# 11. Steam "non-Steam game" shortcut (binary shortcuts.vdf) + grid art
+#------------------------------------------------------------------------------
+add_steam_shortcut() {
+	step "Adding DoomRunner to Steam"
+	local steam_dir="" d running=0 rc
+	for d in "$HOME/.local/share/Steam" "$HOME/.steam/steam" "$HOME/.steam/debian-installation"; do
+		[[ -d "$d/userdata" ]] && { steam_dir="$d"; break; }
+	done
+	if [[ -z "$steam_dir" ]]; then
+		warn "no Steam install found - add DoomRunner manually: Steam -> Games -> Add a Game"
+		return 0
+	fi
+	# Steam keeps shortcuts.vdf in memory and rewrites it on exit
+	pgrep -x steam          >/dev/null 2>&1 && running=1
+	pgrep -x steamwebhelper >/dev/null 2>&1 && running=1
+
+	if STEAM_DIR="$steam_dir" RUNNER_BIN="$RUNNER_BIN" ART_DIR="$STEAM_ART_DIR" \
+	   WRITE=$(( running ? 0 : 1 )) python3 <<'PYEOF'
+import os, shutil, struct, sys, time, zlib
+from pathlib import Path
+
+steam_dir = Path(os.environ["STEAM_DIR"])
+runner    = os.environ["RUNNER_BIN"]
+art_dir   = Path(os.environ["ART_DIR"])
+write     = os.environ.get("WRITE") == "1"
+APPNAME   = "DoomRunner"
+
+# grid/<appid><suffix>  <-  steam_art/<file>
+ART_MAP = {
+    "hero.png":      "_hero.png",
+    "logo.png":      "_logo.png",
+    "capsule.png":   ".png",
+    "capsule_p.png": "p.png",
+    "icon.png":      "_icon.png",
+    "layout.json":   ".json",
+}
+
+def parse(data):
+    pos = 0
+    def rstr():
+        nonlocal pos
+        e = data.index(b"\0", pos)
+        s = data[pos:e].decode("utf-8", "surrogateescape")
+        pos = e + 1
+        return s
+    def obj():
+        nonlocal pos
+        out = {}
+        while pos < len(data):
+            t = data[pos]; pos += 1
+            if t == 8:
+                return out
+            k = rstr()
+            if   t == 0:    out[k] = obj()
+            elif t == 1:    out[k] = rstr()
+            elif t == 2:    out[k] = struct.unpack_from("<i", data, pos)[0]; pos += 4
+            elif t == 4:    out[k] = struct.unpack_from("<Q", data, pos)[0]; pos += 8
+            elif t == 0x0B: out[k] = struct.unpack_from("<q", data, pos)[0]; pos += 8
+            else:           raise ValueError("unsupported vdf type %#x at %r" % (t, k))
+        raise ValueError("unterminated vdf section")
+    root = obj()
+    if pos != len(data):
+        raise ValueError("trailing bytes after vdf root")
+    return root
+
+def ser(obj, out):
+    for k, v in obj.items():
+        kb = k.encode("utf-8", "surrogateescape")
+        if isinstance(v, dict):
+            out += b"\x00" + kb + b"\x00"; ser(v, out); out += b"\x08"
+        elif isinstance(v, str):
+            out += b"\x01" + kb + b"\x00" + v.encode("utf-8", "surrogateescape") + b"\x00"
+        elif isinstance(v, int):
+            if -(2**31) <= v < 2**31: out += b"\x02" + kb + b"\x00" + struct.pack("<i", v)
+            else:                     out += b"\x0B" + kb + b"\x00" + struct.pack("<q", v)
+        else:
+            raise ValueError("unsupported value type %r" % type(v))
+
+exe_quoted = f'"{runner}"'
+profiles = [p / "config" for p in sorted((steam_dir / "userdata").glob("[0-9]*")) if (p / "config").is_dir()]
+if not profiles:
+    print("no Steam user profiles found", file=sys.stderr)
+    sys.exit(4)
+
+# pass 1: is the shortcut already there? (safe while Steam runs)
+results, appid = [], None
+for cfg_dir in profiles:
+    f = cfg_dir / "shortcuts.vdf"
+    root = parse(f.read_bytes()) if f.is_file() else {"shortcuts": {}}
+    hit = next((s for s in root.get("shortcuts", {}).values()
+                if isinstance(s, dict) and (s.get("appname") == APPNAME
+                    or s.get("exe", "").strip('"') == runner)), None)
+    results.append((cfg_dir, root, hit))
+    if hit is not None and appid is None:
+        appid = int(hit.get("appid", 0)) & 0xFFFFFFFF
+
+if appid is None and not write:
+    print("shortcut missing and Steam is running - not writing")
+    sys.exit(3)
+
+ts = time.strftime("%Y%m%d-%H%M%S")
+if appid is None:
+    # Steam marks non-Steam games with the high bit set; the exact value only
+    # has to be stable (grid art is looked up by this number)
+    appid = (zlib.crc32((exe_quoted + APPNAME).encode()) & 0xFFFFFFFF) | 0x80000000
+
+# a bundled 1024px icon.png becomes the entry icon for newly added shortcuts
+icon_path = str(profiles[0] / "grid" / f"{appid}_icon.png") if (art_dir / "icon.png").is_file() else ""
+
+entry = {
+    "appid":         appid - 0x100000000 if appid >= 0x80000000 else appid,
+    "appname":       APPNAME,
+    "exe":           exe_quoted,
+    "StartDir":      str(Path(runner).parent) + "/",
+    "icon":          icon_path,
+    "ShortcutPath":  "",
+    "LaunchOptions": "",
+    "IsHidden":      0,
+    "AllowDesktopConfig": 1,
+    "AllowOverlay":  1,
+    "OpenVR":        0,
+    "Devkit":        0,
+    "DevkitGameID":  "",
+    "DevkitOverrideAppID": 0,
+    "LastPlayTime":  0,
+    "FlatpakAppID":  "",
+    "sortas":        "",
+    "tags":          {},
+}
+
+# pass 2: add to profiles missing it / refresh exe after an AppImage upgrade
+added = updated = 0
+for cfg_dir, root, hit in results:
+    changed = False
+    if hit is None:
+        scs = root.setdefault("shortcuts", {})
+        scs[str(max((int(k) for k in scs if k.isdigit()), default=-1) + 1)] = dict(entry)
+        added += 1
+        changed = True
+    elif write and hit.get("exe") != exe_quoted:
+        hit["exe"] = exe_quoted                      # keep appid -> art survives
+        hit["StartDir"] = str(Path(runner).parent) + "/"
+        updated += 1
+        changed = True
+    if changed and write:
+        f = cfg_dir / "shortcuts.vdf"
+        if f.is_file():
+            shutil.copy2(f, f.with_name(f.name + ".bak." + ts))
+        buf = bytearray()
+        ser(root, buf)
+        buf += b"\x08"  # the whole file is a section too - close it
+        tmp = f.with_name(f.name + ".tmp")
+        tmp.write_bytes(bytes(buf))
+        os.replace(tmp, f)
+
+# grid art (copy is content-checked, safe to run alongside Steam)
+copied = 0
+if appid is not None and art_dir.is_dir():
+    for cfg_dir, _, _ in results:
+        grid = cfg_dir / "grid"
+        for src, suffix in ART_MAP.items():
+            s = art_dir / src
+            if not s.is_file():
+                continue
+            grid.mkdir(exist_ok=True)
+            dst = grid / f"{appid}{suffix}"
+            if not dst.exists() or dst.stat().st_size != s.stat().st_size:
+                shutil.copy2(s, dst)
+                copied += 1
+
+print(f"appid={appid} added={added} updated={updated} art_copied={copied} profiles={len(profiles)}")
+PYEOF
+	then rc=0; else rc=$?; fi
+
+	case "$rc" in
+		0) ok "Steam shortcut in place (idempotent, per user profile)" ;;
+		3) warn "Steam is running - it would overwrite shortcuts.vdf on exit."
+		   warn "quit Steam (tray icon -> Exit Steam) and re-run this script to add the shortcut." ;;
+		*) die "could not update Steam shortcuts (rc=$rc)" ;;
+	esac
+}
+
+#------------------------------------------------------------------------------
+# 12. Verification + summary
 #------------------------------------------------------------------------------
 verify() {
 	step "Verifying"
@@ -706,7 +895,9 @@ assert bad is None, bad
     (or run it from a terminal). The 'DOOM Fusion' preset is preselected;
     pick the Heretic / Hexen / Strife / Chex / Freedoom / Blasphemer presets
     (added for every IWAD found) to play the other games.
-  * In Steam Gaming mode: Add a Game -> browse to the DoomRunner AppImage.
+  * Steam library: DoomRunner is added automatically as a non-Steam game
+    (restart Steam or switch to Gaming mode to see it; skip this line if
+    Steam was running during install - re-run this script after quitting it).
   * Browse mods with DoomRunner: Mods dir = $ROOT/mods/Mods,
     Maps dir  = $ROOT/mods/Maps  (both preconfigured).
   * Review UZDoom permissions any time with Flatseal.
@@ -730,6 +921,7 @@ main() {
 	setup_wadfusion
 	install_extras
 	seed_doomrunner_config
+	add_steam_shortcut
 	verify
 }
 

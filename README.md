@@ -29,11 +29,16 @@ mega-WAD — so everything runs nicely in both Desktop and Gaming mode.
    (a free Heretic total conversion).
 9. **DOOM Fusion** — runs [WadFusion][wadfusion] to build
    `doom_fusion.ipk3` (+ widescreen gfx pk3) into `iwads/`.
-10. **DoomRunner config** — seeds `options.json` with the UZDoom engine,
-    the `iwads`/`mods` directories, the "DOOM Fusion" preset, and one preset
-    per other game whose IWAD is present (Heretic, Hexen, Strife, Chex Quest,
-    Freedoom 1/2, Blasphemer), with per-preset config/save-dir isolation
-    enabled so each game keeps its own settings and saves.
+ 10. **DoomRunner config** — seeds `options.json` with the UZDoom engine,
+     the `iwads`/`mods` directories, the "DOOM Fusion" preset, and one preset
+     per other game whose IWAD is present (Heretic, Hexen, Strife, Chex Quest,
+     Freedoom 1/2, Blasphemer), with per-preset config/save-dir isolation
+     enabled so each game keeps its own settings and saves.
+ 11. **Steam shortcut** — adds DoomRunner to the Steam library as a
+     non-Steam game (binary `shortcuts.vdf`, every user profile) and installs
+     the bundled `steam_art/` grid art (hero, logo, capsules, icon). If Steam
+     is running while the shortcut still needs creating, it prints a hint
+     (Steam rewrites the vdf on exit) instead of writing.
 
 The script is **idempotent**: re-run it any time to update or repair.
 
@@ -108,8 +113,10 @@ Deck. On non-Deck machines just pick your own `--root` (the default is
 
 ## Manual next steps
 
-- Launch DoomRunner by double-clicking the AppImage; to play in Gaming mode,
-  *Add a Game* → browse to the AppImage.
+- Launch DoomRunner by double-clicking the AppImage; it is also added to the
+  Steam library automatically — restart Steam (switching to Gaming mode does
+  it) to see it. If Steam was running during the install, quit it and re-run
+  the script once to create the shortcut.
 - Review UZDoom permissions any time with Flatseal.
 
 ## Acknowledgements
