@@ -111,9 +111,33 @@ Deck. On non-Deck machines just pick your own `--root` (the default is
   *Add a Game* → browse to the AppImage.
 - Review UZDoom permissions any time with Flatseal.
 
+## Acknowledgements
+
+This installer is nothing more than glue around the work of others — thanks
+to all of them:
+
+| Project | For |
+| --- | --- |
+| [UZDoom][uzdoom-gh] | the engine (continuation of [GZDoom][gzdoom] / ZDoom) |
+| [DoomRunner][doomrunner] by Youda008 | the game launcher / mod manager |
+| [WadFusion][wadfusion] by Owlet7 | DOOM Fusion, the ultimate Doom IWAD |
+| [Freedoom][freedoom-gh] | the free Doom-compatible IWADs (Phase 1 + 2) |
+| [Blasphemer][blasphemer-gh] | the free Heretic total conversion |
+| [Flatseal][flatseal] | GUI to review Flatpak permissions |
+| [gamescope][gamescope] | Steam Deck compositor (the [scanout workaround][gamescope-1368] lives in the `uzdoom` wrapper) |
+
+And of course id Software, for Doom, DOOM II, Heretic, Hexen and the rest of
+the classics this all plays host to.
+
 [uzdoom-flathub]: https://flathub.org/apps/org.zdoom.UZDoom
+[uzdoom-gh]: https://github.com/UZDoom/UZDoom
+[gzdoom]: https://github.com/ZDoom/gzdoom
 [doomrunner]: https://github.com/Youda008/DoomRunner
 [wadfusion]: https://github.com/Owlet7/wadfusion
 [freedoom]: https://freedoom.github.io/download.html
+[freedoom-gh]: https://github.com/freedoom/freedoom
 [blasphemer]: https://github.com/Blasphemer/blasphemer/releases
+[blasphemer-gh]: https://github.com/Blasphemer/blasphemer
+[flatseal]: https://github.com/tchx84/Flatseal
+[gamescope]: https://github.com/ValveSoftware/gamescope
 [gamescope-1368]: https://github.com/ValveSoftware/gamescope/issues/1368
