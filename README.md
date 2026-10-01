@@ -143,6 +143,27 @@ to all of them:
 And of course id Software, for Doom, DOOM II, Heretic, Hexen and the rest of
 the classics this all plays host to.
 
+## License
+
+The installer and docs of this repository are licensed under the
+[GNU GPL v3.0][gpl] (or, at your option, any later version) — use, study,
+modify and share freely, keeping derivatives open under the same terms;
+see [LICENSE](LICENSE). The grid art in `steam_art/` is third-party
+community artwork of unknown provenance and explicitly excluded (see its
+README). Third-party tools this script downloads (UZDoom, DoomRunner,
+WadFusion — all GPL-family) are likewise not covered: they reach you under
+their own terms, as do the game assets you stage.
+
+## Disclaimer
+
+This repository was fully coded using AI. It is provided **as is**, with no
+warranties of any kind, without even the implied warranty of fitness for a
+particular purpose — use it at your own risk. It downloads and runs
+third-party binaries and edits Steam and launcher config files on your
+machine; read the script before running it, and keep the `.bak` backups it
+creates.
+
+[gpl]: https://www.gnu.org/licenses/gpl-3.0.html
 [uzdoom-flathub]: https://flathub.org/apps/org.zdoom.UZDoom
 [uzdoom-gh]: https://github.com/UZDoom/UZDoom
 [gzdoom]: https://github.com/ZDoom/gzdoom
