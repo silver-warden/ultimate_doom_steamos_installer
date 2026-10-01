@@ -54,12 +54,12 @@
  #
  # Usage:
  #   ./install_doom.sh [-y] [--root DIR] [--force] [--extras] [--no-extras]
- #     -y, --yes        non-interactive, accept defaults (extras NOT installed)
+ #     -y, --yes        non-interactive, accept everything (incl. extras)
  #     --root DIR       Doom root folder (skips the prompt)
  #     --force          re-download DoomRunner/WadFusion/Freedoom/Blasphemer
  #                      and rebuild the ipk3 even if already in place
  #     --extras         auto-accept the optional Freedoom/Blasphemer downloads
- #     --no-extras      auto-decline them (default under -y)
+ #     --no-extras      auto-decline them (also overrides -y)
 #
 # Idempotent: safe to re-run; every step detects existing installs.
 #===============================================================================
@@ -116,13 +116,13 @@ ask() { # ask <prompt> <default> ; echoes the answer
 	printf '%s\n' "${ans:-$def}"
 }
 
-confirm() { # confirm <question> ; true on yes (AUTO_YES -> EXTRAS, default no)
+confirm() { # confirm <question> ; true on yes (-y accepts everything unless --no-extras)
 	local ans
 	case "$EXTRAS" in
 		1) return 0 ;;
 		0) return 1 ;;
 	esac
-	if (( AUTO_YES )); then return 1; fi
+	if (( AUTO_YES )); then return 0; fi
 	read -r -e -p "$1 [y/N] " ans || ans=""
 	[[ "${ans,,}" =~ ^(y|yes)$ ]]
 }

@@ -83,18 +83,18 @@ against, so it is not recommended.
 
 ```console
 $ ./install_doom.sh                    # interactive
-$ ./install_doom.sh -y                 # defaults everywhere, extras declined
-$ ./install_doom.sh -y --extras        # non-interactive, also grab Freedoom + Blasphemer
+$ ./install_doom.sh -y                 # non-interactive, everything accepted
+$ ./install_doom.sh -y --no-extras     # non-interactive, skip the extra downloads
 $ ./install_doom.sh --root ~/games/Doom --force
 ```
 
 | Flag | Meaning |
 | --- | --- |
-| `-y`, `--yes` | non-interactive, accept defaults (optional downloads declined) |
+| `-y`, `--yes` | non-interactive, accept everything including optional downloads |
 | `--root DIR` | Doom root folder (skips the prompt) |
 | `--force` | re-download DoomRunner/WadFusion/Freedoom/Blasphemer and rebuild the ipk3 |
 | `--extras` | auto-accept the Freedoom/Blasphemer prompts |
-| `--no-extras` | auto-decline them (the default under `-y`) |
+| `--no-extras` | decline the optional downloads (also overrides `-y`) |
 
 ## Supported games
 
