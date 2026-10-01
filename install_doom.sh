@@ -15,7 +15,7 @@
 #                   Sets gamescope's GAMESCOPE_COMPOSITE_FORCE root property
 #                   (gamescope#1368 direct-scanout artifact workaround)
 #   5. Doom root  - prompt for the Doom root folder (default
-#                   /home/deck/juegos/Doom), create the layout:
+#                   ~/Games/Doom), create the layout:
 #                     <root>/iwads   <root>/tools   <root>/mods/{Mods,Maps,
 #                     Graphics,Sound}
 #   6. Sandbox    - one recursive flatpak override gives UZDoom access to the
@@ -77,7 +77,7 @@ FREEDOOM_REPO="freedoom/freedoom"
 FREEDOOM_FALLBACK_URL="https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip"
 BLASPHEMER_REPO="Blasphemer/blasphemer"
 BLASPHEMER_FALLBACK_URL="https://github.com/Blasphemer/blasphemer/releases/download/v0.1.8/blasphem-0.1.8.zip"
-DEFAULT_ROOT="$HOME/juegos/Doom"   # /home/deck/juegos/Doom on the Deck
+DEFAULT_ROOT="$HOME/Games/Doom"    # /home/deck/Games/Doom on the Deck
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STEAM_ART_DIR="$SCRIPT_DIR/steam_art"   # optional non-Steam-game grid art
 STEAM_DIRS=(
@@ -85,10 +85,13 @@ STEAM_DIRS=(
 	"$HOME/.steam/steam/steamapps/common"
 	/run/media/*/Steam/steamapps/common
 	/run/media/*/steamapps/common
+	/run/media/*/*/steamapps/common
 	/media/*/*/Steam/steamapps/common
 	/media/*/*/steamapps/common
+	/media/*/*/*/steamapps/common
 )
 RUNNER_BIN=""          # filled by install_doomrunner
+DR_TAG="v1.9.2"        # DoomRunner version tag, set by install_doomrunner
 ROOT=""                # filled by ask_root
 
 AUTO_YES=0
@@ -219,6 +222,8 @@ for a in json.load(sys.stdin)["assets"]:
 		asset="https://github.com/$DOOMRUNNER_REPO/releases/download/v1.9.2/DoomRunner-1.9.2-Linux-x86_64.AppImage"
 	fi
 
+	DR_TAG="$latest"
+
 	# reuse an existing AppImage in the Doom root if its version matches
 	shopt -s nullglob nocaseglob
 	for existing in "$ROOT"/DoomRunner-*-Linux-x86_64.AppImage; do
@@ -344,28 +349,31 @@ collect_iwads() {
 		[[ -d "$d" ]] && scan_roots+=("$d")
 	done
 
-	local wad sum target lower fb
-	while IFS= read -r -d '' wad; do
-		sum=$(md5sum "$wad" | cut -d' ' -f1)
-		lower="${wad,,}"; lower="${lower##*/}"
-		target=""
-		if [[ -n "${WANT[$sum]:-}" ]]; then
-			target="${WANT[$sum]}"
-		elif [[ -n "${NAME_FALLBACK[$lower]:-}" ]]; then
-			target="${NAME_FALLBACK[$lower]}"
-			# only use the fallback if no hash match has been staged yet
-			[[ -n "${HAVE[$target]:-}" ]] && continue
-			warn "hash does not match WadFusion's recommended version: $wad"
-			warn "  staging it as $target anyway"
-		else
-			continue
-		fi
-		if [[ -z "${HAVE[$target]:-}" ]]; then
+	# collect first, then two passes: a hash match must never lose to a
+	# later name-only fallback (find order depends on the filesystem, so
+	# e.g. rerelease/doom2.wad used to beat base/doom2.wad)
+	local wads=() wad sum target lower pass
+	while IFS= read -r -d '' wad; do wads+=("$wad"); done \
+		< <(find "${scan_roots[@]}" -maxdepth 4 -type f -iname '*.wad' -print0 2>/dev/null)
+
+	for pass in hash name; do
+		for wad in "${wads[@]}"; do
+			if [[ "$pass" == hash ]]; then
+				sum=$(md5sum "$wad" | cut -d' ' -f1)
+				target="${WANT[$sum]:-}"
+			else
+				lower="${wad,,}"; lower="${lower##*/}"
+				target="${NAME_FALLBACK[$lower]:-}"
+				[[ -z "$target" || -n "${HAVE[$target]:-}" ]] && continue
+				warn "hash does not match WadFusion's recommended version: $wad"
+				warn "  staging it as $target anyway"
+			fi
+			[[ -n "$target" && -z "${HAVE[$target]:-}" ]] || continue
 			cp -f "$wad" "$staging/$target"
 			HAVE[$target]="$wad"
 			ok "$target  ${C_DIM}<- $wad${C_OFF}"
-		fi
-	done < <(find "${scan_roots[@]}" -maxdepth 4 -type f -iname '*.wad' -print0 2>/dev/null)
+		done
+	done
 
 	# KEX re-release wads renamed so WadFusion extracts official widescreen gfx
 	local kex_dirs=("$HOME/.local/share/Steam/steamapps/common/Ultimate Doom/rerelease"
@@ -559,14 +567,66 @@ seed_doomrunner_config() {
 	fi
 
 	ROOT="$ROOT" WRAPPER="$UZDOOM_WRAPPER" CFG="$cfg" CFG_DIR="$cfg_dir" \
+	DR_VERSION="${DR_TAG#v}" \
 	python3 <<'PYEOF'
-import json, os
+import copy, json, os
 from pathlib import Path
 
 root    = Path(os.environ["ROOT"])
 wrapper = os.environ["WRAPPER"]
 cfg     = Path(os.environ["CFG"])
+dr_ver  = os.environ.get("DR_VERSION", "1.9.2")
 var_dir = Path.home() / ".var/app/org.zdoom.UZDoom/config/ZDoom"
+
+# full schema as the 1.9.x GUI serializes it (UserData.cpp / OptionsSerializer.cpp).
+# a file WITHOUT "version" is routed to the pre-1.7 compat loader
+# (OptionsSerializer.cpp:478) which expects entirely different keys, and the
+# <1.9.2 migration reinterprets engine IDs as executable paths -> "engine was
+# removed from the list" dialogs. so: complete skeleton + version stamp.
+DEFAULTS = {
+    "version": dr_ver,
+    "engines": { "default_engine": "", "engine_list": [] },
+    "IWADs":   { "auto_update": False, "directory": "", "search_subdirs": False, "default_iwad": "" },
+    "maps":    { "directory": "", "sort_column": 0, "sort_order": 0, "show_icons": True },
+    "mods":    { "last_used_dir": "", "show_icons": True },
+    "launch_options": { "launch_mode": 0, "map_name": "", "save_file": "", "map_name_demo": "",
+                        "demo_file_record": "", "demo_file_replay": "",
+                        "demo_file_resume_from": "", "demo_file_resume_to": "" },
+    "multiplayer_options": { "is_multiplayer": False, "mult_role": 0, "host_name": "", "port": 5029,
+                             "net_mode": 0, "game_mode": 0, "player_count": 2, "team_damage": 0,
+                             "time_limit": 0, "frag_limit": 0, "player_name": "", "player_color": None },
+    "gameplay_options": { "skill_idx": 1, "skill_num": 1, "no_monsters": False, "fast_monsters": False,
+                          "monsters_respawn": False, "pistol_start": False, "allow_cheats": False,
+                          "dmflags1": 0, "dmflags2": 0, "dmflags3": 0 },
+    "compatibility_options": { "compat_mode": -1, "compatflags1": 0, "compatflags2": 0 },
+    "video_options": { "monitor_idx": 0, "resolution_x": None, "resolution_y": None, "show_fps": False },
+    "audio_options": { "no_sound": False, "no_sfx": False, "no_music": False },
+    "global_options": { "use_preset_name_as_config_dir": False, "use_preset_name_as_save_dir": False,
+                        "use_preset_name_as_demo_dir": False, "use_preset_name_as_screenshot_dir": False,
+                        "additional_args": "", "cmd_prefix": "", "env_vars": {} },
+    "options_storage": { "launch_opts": 1, "gameplay_opts": 1, "compat_opts": 1, "video_opts": 1, "audio_opts": 1 },
+    "use_absolute_paths": True,
+    "show_engine_output": True,
+    "close_on_launch": False,
+    "close_output_on_success": False,
+    "check_for_updates": True,
+    "ask_for_sandbox_permissions": True,
+    "wrap_lines_in_txt_viewer": True,
+    "geometry": { "x": 900, "y": 235, "width": 760, "height": 760 },
+    "app_style": None,
+    "color_scheme": "default",
+    "preset_search": { "panel_expanded": False, "case_sensitive": False, "use_regex": False },
+    "hide_map_label": False,
+    "presets": [],
+    "selected_preset": "",
+}
+
+def fill_missing(dst, src):
+    for k, v in src.items():
+        if k not in dst:
+            dst[k] = copy.deepcopy(v)
+        elif isinstance(dst[k], dict) and isinstance(v, dict):
+            fill_missing(dst[k], v)
 
 data = {}
 if cfg.exists():
@@ -574,6 +634,10 @@ if cfg.exists():
         data = json.loads(cfg.read_text())
     except Exception:
         data = {}
+if isinstance(data, dict):
+    fill_missing(data, DEFAULTS)
+else:
+    data = copy.deepcopy(DEFAULTS)
 
 engines = data.setdefault("engines", {})
 engine_list = engines.setdefault("engine_list", [])
@@ -599,8 +663,9 @@ data.setdefault("mods", {})["last_used_dir"] = str(root / "mods" / "Mods")
 
 # per-preset isolation: each preset gets its own config and save dirs
 gopts = data.setdefault("global_options", {})
-gopts["use_preset_name_as_config_dir"] = True
-gopts["use_preset_name_as_save_dir"]   = True
+for k in ("use_preset_name_as_config_dir", "use_preset_name_as_save_dir",
+          "use_preset_name_as_demo_dir", "use_preset_name_as_screenshot_dir"):
+    gopts[k] = True
 
 # DoomRunner resolves relative paths against its CWD - for the AppImage that
 # is the ephemeral /tmp/.mount_* dir - so preset IWADs must be absolute
@@ -632,10 +697,13 @@ def full_preset(name, iwad, mods=None):
 
 presets = data.setdefault("presets", [])
 
-# repair presets seeded by older script versions: complete missing fields and
-# rebind IWADs that got absolutized into a dead /tmp/.mount_* AppImage dir
+# repair presets seeded by older script versions (or clobbered by DoomRunner's
+# <1.9.2 migration): complete missing fields, rebind IWADs that got absolutized
+# into a dead /tmp/.mount_* AppImage dir, and re-point engine selections that
+# DoomRunner cleared/invalidated onto the engine we manage
+known_ids = {e.get("id") for e in engine_list if isinstance(e, dict)}
 for p in presets:
-    if not isinstance(p, dict):
+    if not isinstance(p, dict) or p.get("separator"):
         continue
     compat = p.setdefault("compatibility_options", {})
     for k, v in (("compat_mode", -1), ("compatflags1", 0), ("compatflags2", 0)):
@@ -649,6 +717,11 @@ for p in presets:
         if reborn:
             p["selected_IWAD"] = reborn
             print("rebound", p.get("name"), "->", reborn)
+    eng = p.get("selected_engine")
+    if not eng or eng not in known_ids:
+        p["selected_engine"] = engine_id
+        if eng != engine_id:
+            print("re-engineered", p.get("name"), "(was", eng or "empty", ")")
 
 if not any(p.get("name") == "DOOM Fusion" for p in presets if isinstance(p, dict)):
     presets.append(full_preset("DOOM Fusion", str(iwads_dir / "doom_fusion.ipk3")))
@@ -692,6 +765,9 @@ if mods_lib.is_dir():
         print(f"added {made} mod-folder preset(s)")
 
 data["selected_preset"] = "DOOM Fusion"
+
+# re-stamp: without it the next launch falls into the pre-1.7 compat loader
+data["version"] = dr_ver
 
 cfg.write_text(json.dumps(data, indent="\t") + "\n")
 print("wrote", cfg)

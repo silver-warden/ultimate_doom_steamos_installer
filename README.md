@@ -16,7 +16,7 @@ mega-WAD — so everything runs nicely in both Desktop and Gaming mode.
    binary, and sets gamescope's `GAMESCOPE_COMPOSITE_FORCE` to work around the
    Steam Gaming mode scanout glitch ([gamescope#1368][gamescope-1368]).
 5. **Doom root** — creates the folder layout shown below (asks for the
-   location; default `~/juegos/Doom`).
+   location; default `~/Games/Doom`).
 6. **Sandbox access** — one recursive Flatpak override exposes the whole Doom
    root to UZDoom and sets `DOWADPATH`/`DOOMWADPATH` to the `iwads` folder.
    Flatseal is installed for optional GUI review.
@@ -80,7 +80,7 @@ works, remasters included.
 
 ## Folder layout
 
-Everything lives under one root folder (default `~/juegos/Doom`):
+Everything lives under one root folder (default `~/Games/Doom`):
 
 ```
 Doom/
@@ -115,7 +115,7 @@ Works on **any x86_64 Linux**, not just SteamOS — but these things must exist:
 The SteamOS-specific bits degrade gracefully elsewhere: the SteamOS check is
 only a warning, and the gamescope `xprop` workaround is a no-op outside the
 Deck. On non-Deck machines just pick your own `--root` (the default is
-`$HOME/juegos/Doom`).
+`$HOME/Games/Doom`).
 
 ## Manual next steps
 

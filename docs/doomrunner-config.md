@@ -51,6 +51,37 @@ Always close it before editing (the installer `pgrep`-guards for this).
 }
 ```
 
+> **The `version` key is not optional** (learned 2026-10 on PopOS): a file
+> *without* it is routed to the pre-1.7 compat loader
+> (`OptionsSerializer.cpp:466-491`), which expects legacy keys
+> (`engines/engines`, `IWADs/subdirs`, top-level `use_preset_name_as_*`...),
+> silently ignores the whole modern schema — our `engine_list` never loads —
+> and then the `version < 1.9.2` migration re-reads `selected_engine` as an
+> *executable path*, producing "engine ... was removed from the list, please
+> select another one" dialogs for every preset
+> (`OptionsSerializer.cpp:386-402`). On exit DoomRunner rewrites the file with
+> `engine_list: []`, i.e. it persists the deletion. **Always stamp `version`
+> with the exact installed DoomRunner version** (the script passes the release
+> tag) **and seed the complete key set** — every key below is `MustBePresent`
+> and warns individually when absent.
+
+Complete key set the 1.9.2 GUI reads/writes (see the `DEFAULTS` skeleton in
+`seed_doomrunner_config`): the sections above plus top-level
+`launch_options`, `multiplayer_options`, `gameplay_options`,
+`compatibility_options`, `video_options`, `audio_options` (all read because
+`options_storage` defaults to `StoreGlobally=1`), `options_storage`
+(`launch_opts/gameplay_opts/compat_opts/video_opts/audio_opts`),
+`global_options` (4 × `use_preset_name_as_*` + `additional_args`,
+`cmd_prefix`, `env_vars`), `use_absolute_paths`,
+`geometry{x,y,width,height}`, `color_scheme`, `preset_search
+{panel_expanded,case_sensitive,use_regex}`, `app_style` (null = system),
+and `AllowMissing` ones: `show_engine_output`, `close_on_launch`,
+`close_output_on_success`, `check_for_updates`,
+`ask_for_sandbox_permissions`, `wrap_lines_in_txt_viewer`, `hide_map_label`.
+Engine object keys: `id` (optional), `name`, `path`, `config_dir`, `data_dir`,
+`family` ∈ {`ZDoom`, `ChocolateDoom`, `PrBoom`, `MBF`, `EDGE`, `KEX`}
+(`UserData.cpp:142-177`, `EngineTraits.cpp:42-50`).
+
 ## 3. Preset schema
 
 Write presets **exactly** in the shape the GUI writes. A partial preset makes
@@ -87,6 +118,10 @@ Full preset (all keys required in practice — see storage-mode caveat below):
   warns when absent. Seeding the full shape covers both modes.
 * The GUI-created presets never contain the per-preset option groups unless
   per-preset storage is enabled — don't add them by default.
+* `selected_engine` stores the engine **id** (>= 1.9.2). DoomRunner clears it
+  on load when the id is unknown (and old broken seeds emptied it) — the
+  repair pass re-points presets whose selection is empty/unknown to our
+  managed engine, and never touches a valid other-engine choice.
 
 ## 4. Paths: ALWAYS absolute (the `/tmp/.mount_*` trap)
 
@@ -199,6 +234,10 @@ existing entries are never touched.
 | Fact | Source (`v1.9.2`) |
 | --- | --- |
 | missing-key warnings + message text | `Sources/Utils/JsonUtils.cpp:520` |
+| missing `version` routes to pre-1.7 compat loader | `Sources/OptionsSerializer.cpp:466-491` |
+| preset engine-id "removed from list" migration | `Sources/OptionsSerializer.cpp:386-402` |
+| engine JSON keys + family strings | `Sources/UserData.cpp:142-177`, `Sources/EngineTraits.cpp:42-50` |
+| storage-mode-gated option groups | `Sources/OptionsSerializer.cpp:201-217` |
 | preset serialize/deserialize | `Sources/OptionsSerializer.cpp:37-159` |
 | `IWAD_list` only when auto_update off | `Sources/OptionsSerializer.cpp:181` |
 | CWD = executable dir | `Sources/main.cpp:27` |

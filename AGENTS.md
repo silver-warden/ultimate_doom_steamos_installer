@@ -17,8 +17,11 @@ DoomRunner config seeding and Steam non-Steam game shortcuts.
   relative paths against its CWD, which for the AppImage is an ephemeral
   `/tmp/.mount_*` dir (see doc §4).
 - Config edits are **merge + repair**, never replace: seed the full schema the
-  GUI writes (partial presets trigger missing-key warning dialogs), match
-  existing presets by `name` and never overwrite them.
+  GUI writes (partial presets trigger missing-key warning dialogs) **including
+  a `version` stamp set to the installed DoomRunner tag** — a file without
+  `version` is parsed as the pre-1.7 format: engine list ignored, "engine was
+  removed from the list" dialogs, deletion persisted on exit (see doc §2) —
+  match existing presets by `name` and never overwrite them.
 - **Never rewrite `options.json` while DoomRunner runs, or `shortcuts.vdf`
   while Steam runs** — both keep it in memory and clobber the file on exit.
 - Binary VDF: the whole file is a root section closed by a final `0x08`; fail
