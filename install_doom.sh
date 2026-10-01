@@ -45,9 +45,10 @@
  #                   and one preset per mods/Mods subfolder bundling its
  #                   pk3/wad/deh files (IWAD left to pick in the GUI)
  #  11. Shortcut   - add DoomRunner to Steam's library as a non-Steam game
- #                   (binary shortcuts.vdf in every user profile) and install
- #                   the grid art from steam_art/ next to this script; skipped
- #                   with a hint while Steam runs, which would rewrite the vdf
+#                   (binary shortcuts.vdf in every user profile) and install
+#                   the grid art from steam_art/ next to this script (fetched
+#                   from the repo when that folder is absent); skipped with a
+#                   hint while Steam runs, which would rewrite the vdf
  #  12. Verify     - `uzdoom -version`, sandbox visibility of the mod tree,
  #                   ipk3 integrity, then a summary with manual next steps
  #
@@ -80,6 +81,7 @@ BLASPHEMER_FALLBACK_URL="https://github.com/Blasphemer/blasphemer/releases/downl
 DEFAULT_ROOT="$HOME/Games/Doom"    # /home/deck/Games/Doom on the Deck
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STEAM_ART_DIR="$SCRIPT_DIR/steam_art"   # optional non-Steam-game grid art
+STEAM_ART_BASE="https://raw.githubusercontent.com/silver-warden/ultimate_doom_steamos_installer/main/steam_art"
 STEAM_DIRS=(
 	"$HOME/.local/share/Steam/steamapps/common"
 	"$HOME/.steam/steam/steamapps/common"
@@ -778,8 +780,29 @@ PYEOF
 #------------------------------------------------------------------------------
 # 11. Steam "non-Steam game" shortcut (binary shortcuts.vdf) + grid art
 #------------------------------------------------------------------------------
+fetch_steam_art() {
+	# a single-file curl install has no steam_art/ beside the script -> pull
+	# the grid art from the repo. fetched only when the folder never existed:
+	# once present (even with files deleted by the user) it is left alone.
+	[[ -d "$STEAM_ART_DIR" ]] && return 0
+	mkdir -p "$STEAM_ART_DIR"
+	local f n=0
+	for f in hero.png logo.png capsule.png capsule_p.png icon.png layout.json; do
+		if curl -fsSL --retry 2 -o "$STEAM_ART_DIR/$f.part" "$STEAM_ART_BASE/$f" 2>/dev/null; then
+			mv -f "$STEAM_ART_DIR/$f.part" "$STEAM_ART_DIR/$f" && n=$((n + 1))
+		fi
+	done
+	rm -f "$STEAM_ART_DIR"/*.part
+	if (( n )); then
+		ok "steam grid art fetched from the repo ($n/6 files)"
+	else
+		warn "could not fetch steam_art - the shortcut will use Steam's default icon (harmless)"
+	fi
+}
+
 add_steam_shortcut() {
 	step "Adding DoomRunner to Steam"
+	fetch_steam_art
 	local steam_dir="" d running=0 rc
 	for d in "$HOME/.local/share/Steam" "$HOME/.steam/steam" "$HOME/.steam/debian-installation"; do
 		[[ -d "$d/userdata" ]] && { steam_dir="$d"; break; }

@@ -48,6 +48,37 @@ mega-WAD — so everything runs nicely in both Desktop and Gaming mode.
 
 The script is **idempotent**: re-run it any time to update or repair.
 
+## Install
+
+### Recommended: git clone
+
+```console
+$ git clone https://github.com/silver-warden/ultimate_doom_steamos_installer.git
+$ cd ultimate_doom_steamos_installer
+$ ./install_doom.sh
+```
+
+Updates are then just `git pull && ./install_doom.sh` — the script itself
+re-checks and upgrades DoomRunner/WadFusion/Freedoom and rebuilds DOOM
+Fusion where needed.
+
+### Alternative: download the zip
+
+Grab "Code → Download zip" from GitHub, unpack anywhere and run
+`./install_doom.sh` from there. Updating means re-downloading the zip —
+or just swapping in the new script: the installer is a **single
+self-contained file**; even the optional Steam grid art is fetched from
+the repo when no `steam_art/` folder sits next to the script:
+
+```console
+$ curl -fsSLo install_doom.sh https://raw.githubusercontent.com/silver-warden/ultimate_doom_steamos_installer/main/install_doom.sh
+$ chmod +x install_doom.sh && ./install_doom.sh
+```
+
+A `curl ... | bash` one-liner also works for a single run — but that
+means executing before reading, which the disclaimer below advises
+against, so it is not recommended.
+
 ## Usage
 
 ```console
