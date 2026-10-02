@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #===============================================================================
-# Ultimate Doom installer for SteamOS (Steam Deck)
+# Ultimate Doom installer for SteamOS and Linux (Steam Deck and friends)
 #===============================================================================
 # Automates the full classic-Doom setup on a Steam Deck running in Desktop mode:
 #
@@ -1034,7 +1034,7 @@ EOF
 # main
 #------------------------------------------------------------------------------
 main() {
-	printf '%s=== Ultimate Doom installer for SteamOS ===%s\n' "$C_STEP" "$C_OFF"
+	printf '%s=== Ultimate Doom installer for SteamOS and Linux ===%s\n' "$C_STEP" "$C_OFF"
 	preflight
 	ask_root
 	install_uzdoom

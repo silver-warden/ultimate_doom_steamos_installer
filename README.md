@@ -1,4 +1,4 @@
-# Ultimate Doom installer for SteamOS
+# Ultimate Doom installer for SteamOS and Linux
 
 One-shot installer that sets up a classic-id gaming library (Doom, and friends)
 on a Steam Deck — engine, launcher, IWAD collection, and the DOOM Fusion
@@ -47,6 +47,13 @@ mega-WAD — so everything runs nicely in both Desktop and Gaming mode.
      (Steam rewrites the vdf on exit) instead of writing.
 
 The script is **idempotent**: re-run it any time to update or repair.
+
+## Screenshots
+
+<p align="center">
+  <a href="screenshots/Screenshot_2026-10-02_15-31-21.png"><img src="screenshots/Screenshot_2026-10-02_15-31-21.png" width="49%" alt="DoomRunner shortcut in the Steam library with its custom grid art"></a> <a href="screenshots/Screenshot_2026-10-02_15-31-35.png"><img src="screenshots/Screenshot_2026-10-02_15-31-35.png" width="49%" alt="DoomRunner presets menu: the UZDoom Flatpak engine and the seeded IWADs"></a><br>
+  <a href="screenshots/Screenshot_2026-10-02_15-32-03.png"><img src="screenshots/Screenshot_2026-10-02_15-32-03.png" width="49%" alt="DOOM Fusion gameplay: DOOM II with widescreen textures"></a> <a href="screenshots/Screenshot_2026-10-02_15-32-26.png"><img src="screenshots/Screenshot_2026-10-02_15-32-26.png" width="49%" alt="Heretic gameplay through the seeded Heretic preset"></a>
+</p>
 
 ## Install
 
@@ -193,13 +200,6 @@ particular purpose — use it at your own risk. It downloads and runs
 third-party binaries and edits Steam and launcher config files on your
 machine; read the script before running it, and keep the `.bak` backups it
 creates.
-
-## Screenshots
-
-<p align="center">
-  <a href="screenshots/Screenshot_2026-10-02_15-31-21.png"><img src="screenshots/Screenshot_2026-10-02_15-31-21.png" width="49%" alt="DoomRunner shortcut in the Steam library with its custom grid art"></a> <a href="screenshots/Screenshot_2026-10-02_15-31-35.png"><img src="screenshots/Screenshot_2026-10-02_15-31-35.png" width="49%" alt="DoomRunner presets menu: the UZDoom Flatpak engine and the seeded IWADs"></a><br>
-  <a href="screenshots/Screenshot_2026-10-02_15-32-03.png"><img src="screenshots/Screenshot_2026-10-02_15-32-03.png" width="49%" alt="DOOM Fusion gameplay: DOOM II with widescreen textures"></a> <a href="screenshots/Screenshot_2026-10-02_15-32-26.png"><img src="screenshots/Screenshot_2026-10-02_15-32-26.png" width="49%" alt="Heretic gameplay through the seeded Heretic preset"></a>
-</p>
 
 [gpl]: https://www.gnu.org/licenses/gpl-3.0.html
 [uzdoom-flathub]: https://flathub.org/apps/org.zdoom.UZDoom
