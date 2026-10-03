@@ -560,7 +560,10 @@ seed_doomrunner_config() {
 	local appdata_dir="$HOME/.local/share/DoomRunner"
 	local cfg_dir="${CFG_DIR:-$appdata_dir}"
 	local cfg="${CFG:-$cfg_dir/options.json}"
-	if pgrep -f -i "DoomRunner.*[Aa]pp[Ii]mage|/[Dd]oomrunner$" | grep -qv $$; then
+	# exact-PID exclusion: grep -v "$$" by substring would drop any legit
+	# DoomRunner line that happens to contain the script PID's digits (e.g.
+	# inside the random /tmp/.mount_* suffix) and miss the running app
+	if pgrep -f -i "DoomRunner.*AppImage|/DoomRunner$" | grep -v "^${BASHPID:-$$} " | grep -q .; then
 		warn "DoomRunner is running - it would overwrite options.json on exit."
 		die "close DoomRunner first, then re-run this script"
 	fi
