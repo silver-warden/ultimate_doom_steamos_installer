@@ -148,7 +148,9 @@ while (( $# )); do
 		--extras)    EXTRAS=1 ;;
 		--no-extras) EXTRAS=0 ;;
 		--root)    ROOT_OVERRIDE="${2:?--root needs a directory}"; shift ;;
-		-h|--help) sed -n '2,57p' "$0"; exit 0 ;;
+		# header = line 3 .. the second "#===" rule (first two are the opening
+		# fence around the title, the next one closes the block)
+		-h|--help) awk 'NR == 1 { next } /^#=/ { if (++barr > 2) exit; next } NR >= 3 { print }' "$0"; exit 0 ;;
 		*) die "unknown option: $1 (see --help)" ;;
 	esac
 	shift
