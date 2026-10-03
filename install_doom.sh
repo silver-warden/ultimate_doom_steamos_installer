@@ -600,10 +600,16 @@ var_dir = Path.home() / ".var/app/org.zdoom.UZDoom/config/ZDoom"
 # (OptionsSerializer.cpp:478) which expects entirely different keys, and the
 # <1.9.2 migration reinterprets engine IDs as executable paths -> "engine was
 # removed from the list" dialogs. so: complete skeleton + version stamp.
+# keys that already exist in an existing options.json are NEVER touched here
+# (fill_missing) - the installer-policy values below (auto_update,
+# search_subdirs, use_preset_name_as_*) are only applied when the key is
+# ABSENT, so user toggles made in the DoomRunner GUI survive re-runs.
+# Directory fields stay installer-owned: they are repointed to the current
+# root on every run.
 DEFAULTS = {
     "version": dr_ver,
     "engines": { "default_engine": "", "engine_list": [] },
-    "IWADs":   { "auto_update": False, "directory": "", "search_subdirs": False, "default_iwad": "" },
+    "IWADs":   { "auto_update": True, "directory": "", "search_subdirs": True, "default_iwad": "" },
     "maps":    { "directory": "", "sort_column": 0, "sort_order": 0, "show_icons": True },
     "mods":    { "last_used_dir": "", "show_icons": True },
     "launch_options": { "launch_mode": 0, "map_name": "", "save_file": "", "map_name_demo": "",
@@ -618,8 +624,8 @@ DEFAULTS = {
     "compatibility_options": { "compat_mode": -1, "compatflags1": 0, "compatflags2": 0 },
     "video_options": { "monitor_idx": 0, "resolution_x": None, "resolution_y": None, "show_fps": False },
     "audio_options": { "no_sound": False, "no_sfx": False, "no_music": False },
-    "global_options": { "use_preset_name_as_config_dir": False, "use_preset_name_as_save_dir": False,
-                        "use_preset_name_as_demo_dir": False, "use_preset_name_as_screenshot_dir": False,
+    "global_options": { "use_preset_name_as_config_dir": True, "use_preset_name_as_save_dir": True,
+                        "use_preset_name_as_demo_dir": True, "use_preset_name_as_screenshot_dir": True,
                         "additional_args": "", "cmd_prefix": "", "env_vars": {} },
     "options_storage": { "launch_opts": 1, "gameplay_opts": 1, "compat_opts": 1, "video_opts": 1, "audio_opts": 1 },
     "use_absolute_paths": True,
@@ -668,21 +674,22 @@ if not any(e.get("path") == wrapper or e.get("id") == engine_id for e in engine_
         "data_dir":   str(var_dir),
         "family":     "ZDoom",
     })
-engines["default_engine"] = engine_id
+# default_engine belongs to the user: claim it only when it is empty or
+# points at an engine that no longer exists in the list
+if engines.get("default_engine") not in {e.get("id") for e in engine_list if isinstance(e, dict)}:
+    engines["default_engine"] = engine_id
 
-iwads = data.setdefault("IWADs", {})
-iwads["auto_update"]     = True
-iwads["directory"]       = str(root / "iwads")
-iwads["search_subdirs"]  = True
+# directories are installer-owned (a re-run with a different --root must
+# repoint them); auto_update/search_subdirs come from DEFAULTS when absent
+# and are no longer forced - user toggles survive
+iwads = data["IWADs"]
+iwads["directory"] = str(root / "iwads")
 
-data.setdefault("maps", {})["directory"] = str(root / "mods" / "Maps")
-data.setdefault("mods", {})["last_used_dir"] = str(root / "mods" / "Mods")
+data["maps"]["directory"] = str(root / "mods" / "Maps")
+data["mods"]["last_used_dir"] = str(root / "mods" / "Mods")
 
-# per-preset isolation: each preset gets its own config and save dirs
-gopts = data.setdefault("global_options", {})
-for k in ("use_preset_name_as_config_dir", "use_preset_name_as_save_dir",
-          "use_preset_name_as_demo_dir", "use_preset_name_as_screenshot_dir"):
-    gopts[k] = True
+# per-preset config/save isolation is seeded via DEFAULTS (only when the key
+# is absent) - a user who turned it off in the GUI is not reverted
 
 # DoomRunner resolves relative paths against its CWD - for the AppImage that
 # is the ephemeral /tmp/.mount_* dir - so preset IWADs must be absolute
@@ -781,7 +788,11 @@ if mods_lib.is_dir():
     if made:
         print(f"added {made} mod-folder preset(s)")
 
-data["selected_preset"] = "DOOM Fusion"
+# selected_preset is the user's: seed/repair only when empty or pointing at
+# a preset that no longer exists - never yank it back to DOOM Fusion on re-run
+preset_names = [p.get("name") for p in presets if isinstance(p, dict)]
+if data.get("selected_preset") not in preset_names:
+    data["selected_preset"] = "DOOM Fusion" if "DOOM Fusion" in preset_names else (preset_names[0] if preset_names else "")
 
 # re-stamp: without it the next launch falls into the pre-1.7 compat loader
 data["version"] = dr_ver
