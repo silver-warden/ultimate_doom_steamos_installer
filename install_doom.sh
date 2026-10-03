@@ -498,7 +498,9 @@ install_blasphemer() {
 	curl -fL --retry 3 -o "$tmp/blasphemer.zip" "$url"
 	# the release ships the classic 8.3 name blasphem.wad -> install under
 	# UZDoom's canonical IWADName so DoomRunner labels it correctly
-	inner=$(unzip -Z1 "$tmp/blasphemer.zip" | grep -i 'blasphem.*\.wad' | head -n1)
+	# || true: without it a no-match grep (pipefail) would abort here via set -e
+	# and the helpful die below would never run
+	inner=$(unzip -Z1 "$tmp/blasphemer.zip" | grep -i 'blasphem.*\.wad' | head -n1 || true)
 	[[ -n "$inner" ]] || die "Blasphemer archive layout unexpected (no blasphem*.wad)"
 	unzip -p "$tmp/blasphemer.zip" "$inner" > "$dst.part"
 	mv -f "$dst.part" "$dst"
