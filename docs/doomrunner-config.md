@@ -65,6 +65,17 @@ Always close it before editing (the installer `pgrep`-guards for this).
 > tag) **and seed the complete key set** — every key below is `MustBePresent`
 > and warns individually when absent.
 
+> **Policy flags are seeded, not forced** (learned 2026-10 on review):
+> `auto_update`, `search_subdirs` and the four `use_preset_name_as_*`
+> booleans are applied **only when the key is absent** from an existing
+> `options.json`; `default_engine` and `selected_preset` are only claimed
+> when empty or pointing at an engine/preset that no longer exists.
+> Re-running the installer must never revert a toggle the user made in the
+> GUI. The *directory* fields (`IWADs.directory`, `maps.directory`,
+> `mods.last_used_dir`) are the exception: they are installer-owned and
+> repointed to the current root on every run (the root itself must be
+> absolute — the script `cd`s into it before writing anything).
+
 Complete key set the 1.9.2 GUI reads/writes (see the `DEFAULTS` skeleton in
 `seed_doomrunner_config`): the sections above plus top-level
 `launch_options`, `multiplayer_options`, `gameplay_options`,
@@ -169,8 +180,10 @@ section, `0x01` null-terminated string key+value, `0x02` int32 LE.
 **The entire file is a root section, closed by one final `0x08`** — forgetting
 it produced an unparseable file during testing (that last byte matters!).
 Valve's wider type set also includes `0x03` float, `0x05` wide string,
-`0x08` uint64, `0x0A` int64 — error out loudly on unknown types instead of
-silently rewriting a file you don't fully understand.
+`0x08` uint64, `0x0A` int64. Our parser round-trips `0x03`/`0x04` with their
+original type byte (typed int wrappers) and normalizes `0x0A` to `0x0B`
+(both signed 64-bit); still error out loudly on unknown types (`0x05` etc.)
+instead of silently rewriting a file you don't fully understand.
 
 ### Shortcut entry fields (current Steam, note lowercase `appname`/`exe`)
 
@@ -199,6 +212,26 @@ appid (int32, signed — non-Steam ids have the high bit set, so they LOOK
 * On AppImage upgrades we rebind `exe`/`StartDir` but **keep the appid**, so
   custom art and Steam-side data survive.
 
+### Recognizing our own entry
+
+Pass 1 matches a shortcut by `appname == "DoomRunner"` **or** by the basename
+of `exe` matching `DoomRunner-*.appimage` (case-insensitive). appname-only
+matching breaks the moment the user renames the entry (the appid survives the
+rename, so the renamed entry is still "ours"): the next path change (version
+bump, moved root) would then miss it and add a duplicate next to the stale
+original. All matched entries are repaired, never deleted, and their `appname`
+is left untouched.
+
+The appid is **per-profile data**: every profile keys its grid art (and the
+`icon` field of freshly added entries) by **its own** matched entry's appid —
+preferring a match whose grid files (`<id>.*`, `<id>_*.*`, `<id>p.*`) already
+exist, so a renamed duplicate never orphans the art. A profile that gets a
+new entry receives the first appid found anywhere else (or a deterministic
+crc32 when none exists yet), which keeps one user's rename from mis-keying
+another user's library. Profiles that lack the entry while Steam runs cannot
+be written at all — they are counted as `skipped` and the step exits 3
+instead of claiming success.
+
 ### Custom grid art
 
 Flat files in `<steam>/userdata/<steamid32>/config/grid/`, prefix = the
@@ -214,9 +247,10 @@ Flat files in `<steam>/userdata/<steamid32>/config/grid/`, prefix = the
 | `<id>_icon.png` | icon (`.ico` for some entries) | 1024x1024 |
 | `<id>.json`     | art layout | `{"nVersion":1,"logoPosition":{"pinnedPosition":"BottomLeft","nWidthPct":50,"nHeightPct":50}}` |
 
-Copy targets are content-checked (skip when size matches). If we install an
-icon for a shortcut we create, its `icon` field points at the grid `_icon.png`;
-existing entries are never touched.
+Copy targets are content-checked (skip when size matches) and keyed by each
+profile's own appid. If we install an icon for a shortcut we create, its
+`icon` field points at that profile's own grid `_icon.png`; existing entries
+are never touched.
 
 ## 7. Editing workflow rules (what the installer follows)
 
@@ -224,7 +258,8 @@ existing entries are never touched.
    while Steam runs (both rewrite on exit).
 2. Timestamped `.bak` next to every rewritten file.
 3. Seed by **merge**, never replace; repair missing keys in place; never
-   overwrite user-curated presets (match by `name`).
+   overwrite user-curated presets (match by `name`) and never revert policy
+   booleans the user toggled (seed them only when the key is absent).
 4. Everything absolute; everything idempotent — re-running repairs, never
    duplicates.
 5. Write via temp file + atomic rename in the same directory.
