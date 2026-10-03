@@ -934,37 +934,60 @@ if not profiles:
     print("no Steam user profiles found", file=sys.stderr)
     sys.exit(4)
 
-# pass 1: is the shortcut already there? (safe while Steam runs)
+# Steam keeps a shortcut's appid across renames, so matching only appname or
+# the exact current exe misses a renamed entry the moment our path changes
+# (version bump, moved root) and adds a duplicate instead of updating. match
+# the AppImage filename too so our entry is found however the user labelled it
+def ours(s):
+    if not isinstance(s, dict):
+        return False
+    if s.get("appname") == APPNAME:
+        return True
+    exe = Path(s.get("exe", "").strip('"')).name.lower()
+    return exe.startswith("doomrunner-") and exe.endswith(".appimage")
+
+def has_grid_art(grid, appid):
+    # capsule/layout are "<id>.png"/"<id>.json", portrait capsule is "<id>p.png",
+    # hero/logo/icon carry underscore suffixes ("<id>_hero.png") - a "<id>.*"
+    # glob alone misses most of them; these three patterns can't match a
+    # foreign numeric appid's files (ids are digits only)
+    i = appid & 0xFFFFFFFF
+    return bool(list(grid.glob("%d.*" % i)) or list(grid.glob("%d_*.*" % i))
+                or list(grid.glob("%dp.*" % i)))
+
+# pass 1: are our shortcuts already there? (safe while Steam runs)
+# appid is per-profile data: collect each profile's own id; the reported one
+# (for entries we still have to create) is the first profile that has us
 results, appid = [], None
 for cfg_dir in profiles:
     f = cfg_dir / "shortcuts.vdf"
     root = parse(f.read_bytes()) if f.is_file() else {"shortcuts": {}}
-    hit = next((s for s in root.get("shortcuts", {}).values()
-                if isinstance(s, dict) and (s.get("appname") == APPNAME
-                    or s.get("exe", "").strip('"') == runner)), None)
-    results.append((cfg_dir, root, hit))
-    if hit is not None and appid is None:
-        appid = int(hit.get("appid", 0)) & 0xFFFFFFFF
+    hits = [s for s in root.get("shortcuts", {}).values() if ours(s)]
+    prof_appid = None
+    if hits:
+        grid = cfg_dir / "grid"
+        # prefer a matched entry that already carries grid art - a renamed
+        # duplicate must not orphan it by re-keying the art to a new appid
+        with_art = next((h for h in hits
+                         if has_grid_art(grid, int(h.get("appid", 0)) & 0xFFFFFFFF)), None)
+        prof_appid = int((with_art or hits[0]).get("appid", 0)) & 0xFFFFFFFF
+    results.append((cfg_dir, root, hits, prof_appid))
+    if appid is None:
+        appid = prof_appid
 
-if appid is None and not write:
-    print("shortcut missing and Steam is running - not writing")
-    sys.exit(3)
-
-ts = time.strftime("%Y%m%d-%H%M%S")
+# Steam marks non-Steam games with the high bit set; the exact value only has
+# to be stable (grid art is looked up by this number)
 if appid is None:
-    # Steam marks non-Steam games with the high bit set; the exact value only
-    # has to be stable (grid art is looked up by this number)
     appid = (zlib.crc32((exe_quoted + APPNAME).encode()) & 0xFFFFFFFF) | 0x80000000
 
-# a bundled 1024px icon.png becomes the entry icon for newly added shortcuts
-icon_path = str(profiles[0] / "grid" / f"{appid}_icon.png") if (art_dir / "icon.png").is_file() else ""
+ts = time.strftime("%Y%m%d-%H%M%S")
+icon_src = art_dir / "icon.png"   # bundled 1024px icon -> entry icon on adds
 
 entry = {
-    "appid":         appid - 0x100000000 if appid >= 0x80000000 else appid,
     "appname":       APPNAME,
     "exe":           exe_quoted,
     "StartDir":      str(Path(runner).parent) + "/",
-    "icon":          icon_path,
+    "icon":          "",          # filled per profile below (own grid dir)
     "ShortcutPath":  "",
     "LaunchOptions": "",
     "IsHidden":      0,
@@ -981,19 +1004,31 @@ entry = {
 }
 
 # pass 2: add to profiles missing it / refresh exe after an AppImage upgrade
-added = updated = 0
-for cfg_dir, root, hit in results:
+# (all matches get repaired, so leftover duplicates never keep a stale path)
+added = updated = skipped = 0
+art_ids = []                       # (cfg_dir, unsigned appid to key art by)
+for cfg_dir, root, hits, prof_appid in results:
     changed = False
-    if hit is None:
+    if not hits:
+        if not write:              # Steam running: nothing may be written,
+            skipped += 1           # report it instead of claiming success
+            art_ids.append((cfg_dir, None))
+            continue
+        new = dict(entry)
+        new["appid"] = appid - 0x100000000 if appid >= 0x80000000 else appid
+        if icon_src.is_file():     # points at THIS profile's grid copy
+            new["icon"] = str(cfg_dir / "grid" / f"{appid}_icon.png")
         scs = root.setdefault("shortcuts", {})
-        scs[str(max((int(k) for k in scs if k.isdigit()), default=-1) + 1)] = dict(entry)
+        scs[str(max((int(k) for k in scs if k.isdigit()), default=-1) + 1)] = new
         added += 1
         changed = True
-    elif write and hit.get("exe") != exe_quoted:
-        hit["exe"] = exe_quoted                      # keep appid -> art survives
-        hit["StartDir"] = str(Path(runner).parent) + "/"
-        updated += 1
-        changed = True
+    elif write:
+        for hit in hits:
+            if hit.get("exe") != exe_quoted:
+                hit["exe"] = exe_quoted                  # keep appid -> art survives
+                hit["StartDir"] = str(Path(runner).parent) + "/"
+                updated += 1
+                changed = True
     if changed and write:
         f = cfg_dir / "shortcuts.vdf"
         if f.is_file():
@@ -1004,23 +1039,31 @@ for cfg_dir, root, hit in results:
         tmp = f.with_name(f.name + ".tmp")
         tmp.write_bytes(bytes(buf))
         os.replace(tmp, f)
+    art_ids.append((cfg_dir, prof_appid if prof_appid is not None else appid))
 
-# grid art (copy is content-checked, safe to run alongside Steam)
+# grid art (copy is content-checked, safe to run alongside Steam) - keyed by
+# each profile's own appid, so one profile's id can't mis-key another's art
 copied = 0
-if appid is not None and art_dir.is_dir():
-    for cfg_dir, _, _ in results:
+if art_dir.is_dir():
+    for cfg_dir, art_id in art_ids:
+        if art_id is None:
+            continue
         grid = cfg_dir / "grid"
         for src, suffix in ART_MAP.items():
             s = art_dir / src
             if not s.is_file():
                 continue
             grid.mkdir(exist_ok=True)
-            dst = grid / f"{appid}{suffix}"
+            dst = grid / f"{art_id}{suffix}"
             if not dst.exists() or dst.stat().st_size != s.stat().st_size:
                 shutil.copy2(s, dst)
                 copied += 1
 
-print(f"appid={appid} added={added} updated={updated} art_copied={copied} profiles={len(profiles)}")
+print(f"appid={appid} added={added} updated={updated} skipped={skipped} art_copied={copied} profiles={len(profiles)}")
+if skipped and not write:
+    print("shortcut missing in %d/%d profiles and Steam is running - "
+          "those were not written" % (skipped, len(profiles)), file=sys.stderr)
+    sys.exit(3)
 PYEOF
 	then rc=0; else rc=$?; fi
 
