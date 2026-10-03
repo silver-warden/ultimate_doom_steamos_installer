@@ -874,6 +874,12 @@ ART_MAP = {
     "layout.json":   ".json",
 }
 
+# typed int/float wrappers so a rewrite keeps the original vdf type byte
+# (a plain int would silently turn a 0x04 uint64 into a 0x0B int64)
+class VUint64(int): _vtype = 4
+class VInt64(int):  _vtype = 0x0B   # input 0x0A (signed 64-bit) normalizes here
+class VFloat(float): _vtype = 3
+
 def parse(data):
     pos = 0
     def rstr():
@@ -893,8 +899,9 @@ def parse(data):
             if   t == 0:    out[k] = obj()
             elif t == 1:    out[k] = rstr()
             elif t == 2:    out[k] = struct.unpack_from("<i", data, pos)[0]; pos += 4
-            elif t == 4:    out[k] = struct.unpack_from("<Q", data, pos)[0]; pos += 8
-            elif t == 0x0B: out[k] = struct.unpack_from("<q", data, pos)[0]; pos += 8
+            elif t == 3:    out[k] = VFloat(struct.unpack_from("<f", data, pos)[0]); pos += 4
+            elif t == 4:    out[k] = VUint64(struct.unpack_from("<Q", data, pos)[0]); pos += 8
+            elif t in (0x0A, 0x0B): out[k] = VInt64(struct.unpack_from("<q", data, pos)[0]); pos += 8
             else:           raise ValueError("unsupported vdf type %#x at %r" % (t, k))
         raise ValueError("unterminated vdf section")
     root = obj()
@@ -909,9 +916,15 @@ def ser(obj, out):
             out += b"\x00" + kb + b"\x00"; ser(v, out); out += b"\x08"
         elif isinstance(v, str):
             out += b"\x01" + kb + b"\x00" + v.encode("utf-8", "surrogateescape") + b"\x00"
+        elif isinstance(v, float):
+            out += b"\x03" + kb + b"\x00" + struct.pack("<f", v)
         elif isinstance(v, int):
-            if -(2**31) <= v < 2**31: out += b"\x02" + kb + b"\x00" + struct.pack("<i", v)
-            else:                     out += b"\x0B" + kb + b"\x00" + struct.pack("<q", v)
+            t = getattr(v, "_vtype", None)
+            if t is None:
+                t = 2 if -(2**31) <= v < 2**31 else 0x0B
+            if   t == 2: out += b"\x02" + kb + b"\x00" + struct.pack("<i", v)
+            elif t == 4: out += b"\x04" + kb + b"\x00" + struct.pack("<Q", v)
+            else:        out += b"\x0B" + kb + b"\x00" + struct.pack("<q", v)
         else:
             raise ValueError("unsupported value type %r" % type(v))
 
