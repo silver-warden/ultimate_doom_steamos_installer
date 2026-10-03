@@ -1119,8 +1119,9 @@ assert bad is None, bad
 	fi
 
 	local game_wads
+	# comma-joined (filenames may contain spaces) and basename-only via -printf
 	game_wads=$(find "$ROOT/iwads" -maxdepth 1 -type f \( -iname '*.wad' -o -iname '*.ipk3' \) \
-		| sed "s|.*/||" | sort | paste -sd' ' -)
+		-printf '%f\n' 2>/dev/null | sort | awk '{ printf "%s%s", (NR > 1 ? ", " : ""), $0 }')
 	ok "IWADs in place: ${game_wads:-none}"
 
 	step "Done - next steps"
