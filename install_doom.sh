@@ -807,7 +807,9 @@ if data.get("selected_preset") not in preset_names:
 # re-stamp: without it the next launch falls into the pre-1.7 compat loader
 data["version"] = dr_ver
 
-cfg.write_text(json.dumps(data, indent="\t") + "\n")
+tmp = cfg.with_name(cfg.name + ".tmp")
+tmp.write_text(json.dumps(data, indent="\t") + "\n")
+os.replace(tmp, cfg)  # temp file + atomic rename, same as the vdf writer
 print("wrote", cfg)
 PYEOF
 	ok "engine + directories + 'DOOM Fusion' + per-game presets configured"
