@@ -209,7 +209,7 @@ install_uzdoom() {
 #------------------------------------------------------------------------------
 install_doomrunner() {
 	step "Setting up DoomRunner"
-	local api latest asset name existing
+	local api latest asset name existing ebase
 	api=$(curl -fsSL "https://api.github.com/repos/$DOOMRUNNER_REPO/releases/latest" 2>/dev/null || true)
 	latest=$(printf '%s' "$api" | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])' 2>/dev/null || true)
 	asset=$(printf '%s' "$api" | python3 -c '
@@ -230,8 +230,12 @@ for a in json.load(sys.stdin)["assets"]:
 
 	# reuse an existing AppImage in the Doom root if its version matches
 	shopt -s nullglob nocaseglob
+	# exact filename (lowercased - nocaseglob let any casing through): a plain
+	# substring match of the tag would reuse e.g. 1.9.20 for 1.9.2, or match a
+	# digit-bearing root path
 	for existing in "$ROOT"/DoomRunner-*-Linux-x86_64.AppImage; do
-		if [[ "$existing" == *"${latest#v}"* ]]; then
+		ebase="${existing##*/}"; ebase="${ebase,,}"
+		if [[ "$ebase" == "doomrunner-${latest#v}-linux-x86_64.appimage" ]]; then
 			RUNNER_BIN="$existing"
 			ok "reusing ${existing##*/}"
 			shopt -u nullglob nocaseglob
