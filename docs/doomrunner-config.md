@@ -76,6 +76,13 @@ Always close it before editing (the installer `pgrep`-guards for this).
 > repointed to the current root on every run (the root itself must be
 > absolute — the script `cd`s into it before writing anything).
 
+> **Seed correct JSON types per key** (learned 2026-10): `MustBePresent`
+> keys are also type-checked — `"video_options.resolution_x/y"` are `uint`,
+> so a seeded `null` produces *"has invalid type. Expected uint. Using
+> default value"* on every load. The GUI writes `0` (= auto) there; a
+> re-run coerces non-int values back to `0`. Only genuinely optional
+> fields (`app_style`, `player_color`) may be `null`.
+
 Complete key set the 1.9.2 GUI reads/writes (see the `DEFAULTS` skeleton in
 `seed_doomrunner_config`): the sections above plus top-level
 `launch_options`, `multiplayer_options`, `gameplay_options`,

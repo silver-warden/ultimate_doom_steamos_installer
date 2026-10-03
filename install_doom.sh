@@ -639,7 +639,9 @@ DEFAULTS = {
                           "monsters_respawn": False, "pistol_start": False, "allow_cheats": False,
                           "dmflags1": 0, "dmflags2": 0, "dmflags3": 0 },
     "compatibility_options": { "compat_mode": -1, "compatflags1": 0, "compatflags2": 0 },
-    "video_options": { "monitor_idx": 0, "resolution_x": None, "resolution_y": None, "show_fps": False },
+    # resolution_x/y are uint to the serializer: null triggers
+    # "has invalid type. Expected uint" on load - the GUI writes 0 (= auto)
+    "video_options": { "monitor_idx": 0, "resolution_x": 0, "resolution_y": 0, "show_fps": False },
     "audio_options": { "no_sound": False, "no_sfx": False, "no_music": False },
     "global_options": { "use_preset_name_as_config_dir": True, "use_preset_name_as_save_dir": True,
                         "use_preset_name_as_demo_dir": True, "use_preset_name_as_screenshot_dir": True,
@@ -721,6 +723,12 @@ data["mods"]["last_used_dir"] = str(root / "mods" / "Mods")
 # DoomRunner resolves relative paths against its CWD - for the AppImage that
 # is the ephemeral /tmp/.mount_* dir - so preset IWADs must be absolute
 data["use_absolute_paths"] = True
+
+# uint fields must never be null ("invalid type, expected uint" warnings) -
+# repair nulls left by older seeds; fill_missing only claims ABSENT keys
+for k in ("resolution_x", "resolution_y"):
+    if not isinstance(data["video_options"].get(k), int):
+        data["video_options"][k] = 0
 
 iwads_dir = root / "iwads"
 by_lower = {}
