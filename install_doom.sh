@@ -312,6 +312,10 @@ grant_permissions() {
 	# A single filesystem permission on a directory is recursive: the whole
 	# tree under $ROOT (all subfolders, incl. ones created later) is visible.
 	# --user overrides apply whether UZDoom was installed system-wide or not.
+	# NB: overrides accumulate - re-running with a different root keeps the
+	# old binding live; prune with
+	#   flatpak override --user "$UZDOOM_APP_ID" --nofilesystem=<old-root>
+	# or review in Flatseal.
 	flatpak override --user "$UZDOOM_APP_ID" \
 		--filesystem="$ROOT" \
 		--env=DOWADPATH="$ROOT/iwads" \
