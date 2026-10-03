@@ -288,6 +288,10 @@ ask_root() {
 	fi
 	ROOT="${ROOT/#\~/$HOME}"
 	mkdir -p "$ROOT"/{iwads,tools,mods/Mods,mods/Maps,mods/Graphics,mods/Sound,mods/Music,mods/Performance}
+	# absolutize - everything we write into options.json / shortcuts.vdf /
+	# flatpak overrides must be absolute (see docs/doomrunner-config.md - the
+	# /tmp/.mount_* trap - and flatpak rejects relative filesystem paths)
+	ROOT=$(cd -- "$ROOT" && pwd)
 	ok "root: $ROOT"
 	if [[ -f "$ROOT/mods/Put your mods (.pk3 etc) files here.txt" || -n "$(ls -A "$ROOT/mods/Mods" 2>/dev/null)" ]]; then
 		ok "found existing mod library"
