@@ -138,6 +138,18 @@ for a in d.get("assets", []):
 }
 
 #------------------------------------------------------------------------------
+# Temp file cleanup - fires on ANY exit; paths renamed in place on success
+# simply no longer exist by then (rm -f)
+#------------------------------------------------------------------------------
+CLEANUP=()
+atexit() {
+	(( ${#CLEANUP[@]} )) || return 0
+	local p
+	for p in "${CLEANUP[@]}"; do rm -rf "$p"; done
+}
+trap atexit EXIT
+
+#------------------------------------------------------------------------------
 # Arg parsing
 #------------------------------------------------------------------------------
 ROOT_OVERRIDE=""
@@ -250,6 +262,7 @@ for a in json.load(sys.stdin)["assets"]:
 		ok "$name already downloaded"
 	else
 		printf '%s  downloading%s %s\n' "$C_DIM" "$C_OFF" "$name"
+		CLEANUP+=("$RUNNER_BIN.part")
 		curl -fL --retry 3 -o "$RUNNER_BIN.part" "$asset"
 		mv -f "$RUNNER_BIN.part" "$RUNNER_BIN"
 		ok "installed $name"
@@ -471,7 +484,7 @@ install_freedoom() {
 		warn "Freedoom GitHub API unreachable - falling back to v0.13.0"
 		url="$FREEDOOM_FALLBACK_URL"
 	fi
-	tmp=$(mktemp -d)
+	tmp=$(mktemp -d); CLEANUP+=("$tmp")
 	printf '%s  downloading%s %s\n' "$C_DIM" "$C_OFF" "${url##*/}"
 	curl -fL --retry 3 -o "$tmp/freedoom.zip" "$url"
 	unzip -oq "$tmp/freedoom.zip" -d "$tmp"
@@ -497,7 +510,7 @@ install_blasphemer() {
 		warn "Blasphemer GitHub API unreachable - falling back to v0.1.8"
 		url="$BLASPHEMER_FALLBACK_URL"
 	fi
-	tmp=$(mktemp -d)
+	tmp=$(mktemp -d); CLEANUP+=("$tmp")
 	printf '%s  downloading%s %s\n' "$C_DIM" "$C_OFF" "${url##*/}"
 	curl -fL --retry 3 -o "$tmp/blasphemer.zip" "$url"
 	# the release ships the classic 8.3 name blasphem.wad -> install under
@@ -528,7 +541,7 @@ setup_wadfusion() {
 
 	if [[ ! -f "$WF_DIR/wadfusion.py" || $FORCE -eq 1 ]]; then
 		local tmp
-		tmp=$(mktemp -d)
+		tmp=$(mktemp -d); CLEANUP+=("$tmp")
 		curl -fL --retry 3 -o "$tmp/wadfusion.zip" "$WADFUSION_ZIP_URL"
 		unzip -oq "$tmp/wadfusion.zip" -d "$WF_DIR"
 		rm -rf "$tmp"
