@@ -646,10 +646,15 @@ DEFAULTS = {
 
 def fill_missing(dst, src):
     for k, v in src.items():
-        if k not in dst:
+        if isinstance(v, dict):
+            # a section that exists as a scalar/list (corrupt or hand-edited
+            # file) would crash every later setdefault on it -> replace
+            if not isinstance(dst.get(k), dict):
+                dst[k] = copy.deepcopy(v)
+            else:
+                fill_missing(dst[k], v)
+        elif k not in dst:
             dst[k] = copy.deepcopy(v)
-        elif isinstance(dst[k], dict) and isinstance(v, dict):
-            fill_missing(dst[k], v)
 
 data = {}
 if cfg.exists():
@@ -662,8 +667,13 @@ if isinstance(data, dict):
 else:
     data = copy.deepcopy(DEFAULTS)
 
-engines = data.setdefault("engines", {})
-engine_list = engines.setdefault("engine_list", [])
+def as_list(parent, key):
+    if not isinstance(parent.get(key), list):
+        parent[key] = []
+    return parent[key]
+
+engines = data["engines"]
+engine_list = as_list(engines, "engine_list")
 engine_id = "uzdoom-flatpak"
 if not any(e.get("path") == wrapper or e.get("id") == engine_id for e in engine_list if isinstance(e, dict)):
     engine_list.append({
@@ -719,7 +729,7 @@ def full_preset(name, iwad, mods=None):
         "env_vars":          {},
     }
 
-presets = data.setdefault("presets", [])
+presets = as_list(data, "presets")
 
 # repair presets seeded by older script versions (or clobbered by DoomRunner's
 # <1.9.2 migration): complete missing fields, rebind IWADs that got absolutized
